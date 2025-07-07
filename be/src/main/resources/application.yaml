@@ -1,0 +1,27 @@
+server:
+  port: 8080
+#  servlet:
+#    context-path: /api
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path:  /api-docs
+
+spring:
+  application:
+    name: be
+  datasource:
+    url: "jdbc:mysql://localhost:3306/datn-hieu-db?createDatabaseIfNotExist=true"
+    driverClassName: "com.mysql.cj.jdbc.Driver"
+    username: root
+    password: root
+  jpa:
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+
+jwt:
+    secret: "qEHFsTyk3Q9vse038kGWG+WGN56HxqvgI3h3DRBqf1w="
+    expiration: 3600000

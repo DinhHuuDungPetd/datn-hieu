@@ -1,0 +1,39 @@
+# Java / Spring Boot
+be/target/
+be/.classpath
+be/.project
+be/.settings/
+be/.idea/
+be/*.iml
+be/.mvn/
+be/mvnw*
+be/HELP.md
+
+# Node.js / Next.js
+free-nextjs-admin-dashboard-main/node_modules/
+free-nextjs-admin-dashboard-main/.next/
+free-nextjs-admin-dashboard-main/.env*
+free-nextjs-admin-dashboard-main/.eslintcache
+free-nextjs-admin-dashboard-main/.turbo/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+*.rar
+*.zip
+*.7z
+*.tar.gz
+*.tar
+*.gz
+*.tgz
+*.lock
+
+# Others
+*.jar
+*.class
+*.orig 
