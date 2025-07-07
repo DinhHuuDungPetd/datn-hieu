@@ -1,14 +1,9 @@
 package com.petd.be.service.useCase;
 
 import com.petd.be.dto.request.product.ProductRequest;
-import com.petd.be.dto.response.product.ProductResponse;
-import com.petd.be.entity.Color;
-import com.petd.be.entity.Product;
-import com.petd.be.entity.ProductImage;
-import com.petd.be.entity.ProductItem;
-import com.petd.be.entity.Size;
-import com.petd.be.mapper.Product.ColorMapper;
-import com.petd.be.mapper.Product.SizeMapper;
+import com.petd.be.entity.*;
+import com.petd.be.exception.AppException;
+import com.petd.be.exception.ErrorCode;
 import com.petd.be.repository.ProductImageRepository;
 import com.petd.be.repository.ProductItemRepository;
 import com.petd.be.repository.ProductRepository;
@@ -16,19 +11,20 @@ import com.petd.be.service.ColorService;
 import com.petd.be.service.SizeService;
 import com.petd.be.until.ProductStatus;
 import jakarta.transaction.Transactional;
-import java.util.ArrayList;
-import java.util.List;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j
-public class CreateProductTransactionCase {
+public class UpdateProductTransactionCase {
 
   ColorService colorService;
   SizeService sizeService;
@@ -37,15 +33,16 @@ public class CreateProductTransactionCase {
   ProductImageRepository productImageRepository;
 
   @Transactional
-  public Product createProduct(ProductRequest productRequest, String createBy) {
-    Product product = Product.builder()
-        .productName(productRequest.getProductName())
-        .description(productRequest.getDescription())
-        .status(ProductStatus.ACTIVE.toString())
-        .createdBy(createBy)
-        .build();
+  public Product updateProduct(ProductRequest productRequest, String productId) {
+    Product product =  productRepository.findById(productId)
+                    .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+    product.setProductName(productRequest.getProductName());
+    product.setDescription(productRequest.getDescription());
+
     productRepository.save(product);
-    List<ProductItem> productItems = new ArrayList<>();
+
+    List<ProductItem> productItems =product.getProductItems();
+
     productRequest.getProductItems().forEach(productItemRequest -> {
       Color color = colorService.findById(productItemRequest.getColorId());
       Size size = sizeService.findById(productItemRequest.getSizeId());

@@ -16,6 +16,8 @@ import com.petd.be.entity.ProductImage;
 import com.petd.be.entity.ProductItem;
 import com.petd.be.entity.Size;
 import com.petd.be.entity.User;
+import com.petd.be.exception.AppException;
+import com.petd.be.exception.ErrorCode;
 import com.petd.be.mapper.Product.ColorMapper;
 import com.petd.be.mapper.Product.SizeMapper;
 import com.petd.be.repository.ProductImageRepository;
@@ -33,7 +35,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -59,6 +63,12 @@ public class ProductService {
     return toProductDetailsResponse(createProductTransactionCase.createProduct(productRequest, createBy));
   }
 
+  public ProductDetailsResponse getProductDetails(String productId) {
+    Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+    return toProductDetailsResponse(product);
+  }
+
   public List<ProductResponse> getAllProducts() {
     List<Product> products = productRepository.findAll();
     return  products.stream()
@@ -68,18 +78,24 @@ public class ProductService {
 
   public Page<ProductResponse> search(ProductSearchRequest request, Pageable pageable) {
     if (request == null) {
+      // Nếu pageable chưa có sort → thêm sort theo createdAt giảm dần
+      if (pageable.getSort().isUnsorted()) {
+        pageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by("createdAt").descending());
+      }
       return productRepository.findAll(pageable)
-          .map(this::toProductResponse);
+              .map(this::toProductResponse);
     }
 
     Specification<Product> spec = buildSpecification(request);
+
+    // Tương tự thêm sort nếu chưa có
+    if (pageable.getSort().isUnsorted()) {
+      pageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by("createdAt").descending());
+    }
+
     Page<Product> productPage = productRepository.findAll(spec, pageable);
     return productPage.map(this::toProductResponse);
   }
-
-
-
-
 
 
   public ProductResponse toProductResponse(Product product) {
@@ -151,6 +167,7 @@ public class ProductService {
         .quantity(productItem.getQuantity())
         .color(colorResponse)
         .size(sizeResponse)
+        .imageUrl(productItem.getImageUrl())
         .createdBy(productItem.getCreatedBy())
         .updatedAt(productItem.getUpdatedAt())
         .createdBy(productItem.getCreatedBy())

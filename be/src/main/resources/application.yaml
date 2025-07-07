@@ -13,13 +13,13 @@ spring:
   application:
     name: be
   datasource:
-    url: "jdbc:mysql://localhost:3306/datn-hieu-db?createDatabaseIfNotExist=true"
+    url: "jdbc:mysql://160.250.137.207:3306/datn-hieu-db?createDatabaseIfNotExist=true"
     driverClassName: "com.mysql.cj.jdbc.Driver"
     username: root
     password: root
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
     show-sql: true
 
 jwt:
