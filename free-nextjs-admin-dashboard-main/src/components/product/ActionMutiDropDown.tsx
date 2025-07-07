@@ -2,9 +2,13 @@
 import React, { useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
-import {View, Pencil, Files, Check, CircleOff, Unplug, PackageX} from "lucide-react";
+import {View, Pencil, Files, Check, Unplug, PackageX} from "lucide-react";
 
-export default function ActionMutiDropDown() {
+type props = {
+  productId: string
+}
+
+export default function ActionMutiDropDown({ productId }: props) {
   const [isOpen, setIsOpen] = useState(false);
 
   function toggleDropdown(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
@@ -64,7 +68,7 @@ export default function ActionMutiDropDown() {
               <DropdownItem
                   onItemClick={closeDropdown}
                   tag="a"
-                  href="/profile"
+                  href={`/manager/manager-product/edit/${productId}`}
                   className="flex items-center gap-3 font-medium text-gray-700 rounded-lg group text-theme-xs hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
               >
                 <Pencil size={18} />
@@ -75,7 +79,7 @@ export default function ActionMutiDropDown() {
               <DropdownItem
                   onItemClick={closeDropdown}
                   tag="a"
-                  href="/profile"
+                  href={`/manager/manager-product/create-product?copy_product_id=${productId}`}
                   className="flex items-center gap-3 font-medium text-gray-700 rounded-lg group text-theme-xs hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
               >
                 <Files size={18} />

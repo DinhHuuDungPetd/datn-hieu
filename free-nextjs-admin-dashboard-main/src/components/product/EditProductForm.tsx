@@ -1,7 +1,7 @@
 "use client"
 import Button from "@/components/ui/button/Button";
 import { PackagePlus } from "lucide-react";
-import React, {useRef, useEffect, useState, useMemo, useCallback} from "react";
+import {useRef, useEffect, useState, useMemo, useCallback} from "react";
 import DropImageProduct from "./DropImageProduct";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
@@ -15,9 +15,8 @@ import ProductVariantTable from "./ProductVariantTable";
 import {createProduct, getProductDetails} from "@/api/productApi";
 import { uploadImageToCloudinary } from "@/api/cloudinaryApi";
 import {toast} from "react-toastify";
-import {useRouter, useSearchParams} from "next/navigation";
-import {returnStatement} from "@babel/types";
-
+import {useRouter} from "next/navigation";
+import { useParams } from "next/navigation";
 
 const IMAGE_SLOT_COUNT = 9;
 
@@ -33,11 +32,10 @@ const SECTIONS = [
   { id: "sales-info", label: "Sales information" }
 ];
 
-export default function CreateProductForm() {
+export default function EditProductForm() {
 
-  const searchParams = useSearchParams();
-
-  const productId = searchParams.get("copy_product_id") as string;
+  const params = useParams();
+  const id = params.id as string;
 
   const [images, setImages] = useState<(File | null)[]>(Array(IMAGE_SLOT_COUNT).fill(null));
   const [previews, setPreviews] = useState<(string | null)[]>(Array(IMAGE_SLOT_COUNT).fill(null));
@@ -61,10 +59,9 @@ export default function CreateProductForm() {
   }, [previews]);
 
   useEffect(() => {
-    if(!productId) return;
     (async () => {
       try {
-        const response = await getProductDetails(productId);
+        const response = await getProductDetails(id);
         console.log(response)
         setProductName(response.productName);
         setDescription(response.description);
@@ -121,11 +118,10 @@ export default function CreateProductForm() {
         setVariantData(variantDataObj);
 
       } catch (e: any) {
-        console.log(e)
-        toast.error("sản phẩm không tồn tại");
+        toast.error(e?.message || "Đã có lỗi xảy ra");
       }
     })();
-  }, [productId]);
+  }, [id]);
 
   const handleDrop = useCallback(
     (index: number) => (acceptedFiles: File[]) => {

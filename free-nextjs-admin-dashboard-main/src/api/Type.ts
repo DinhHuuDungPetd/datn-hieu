@@ -62,6 +62,17 @@ export type Product = {
   createdBy: string;
 };
 
+export type ProductDetails = {
+  id: string;
+  productName: string;
+  description: string;
+  images: ProductImage []
+  productItems: ProductItem [],
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+};
+
 export type Attribute ={
   colors: Color[];
   sizes: Size[];

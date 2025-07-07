@@ -1,4 +1,4 @@
-import {ApiResponse, Page, Product} from "@/api/Type";
+import {ApiResponse, Page, Product, ProductDetails} from "@/api/Type";
 import AxiosInstance from "@/until/AxiosInstance";
 import {ProductSearchRequest} from "@/components/product/ProductTable";
 import {Property} from "csstype";
@@ -30,3 +30,13 @@ export const createProduct = async (product: any) => {
     console.log(error);
   }
 }
+
+export const getProductDetails = async (productId: string): Promise<ProductDetails> => {
+  try {
+    const response = await AxiosInstance.get<ApiResponse<ProductDetails>>(`/manager/product/${productId}`);
+    return response.data.result;
+  } catch (error) {
+    console.error(error);
+    throw new Error("Không thể lấy chi tiết sản phẩm");
+  }
+};
