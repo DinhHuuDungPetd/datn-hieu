@@ -44,6 +44,9 @@ public class ProductItem {
 
   Long quantity;
 
+  @Builder.Default
+  Boolean isActive = true;
+
   @ManyToOne
   @JoinColumn(name = "product_id")
   Product product;

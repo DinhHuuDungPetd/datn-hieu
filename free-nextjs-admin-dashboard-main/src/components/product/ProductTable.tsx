@@ -10,7 +10,7 @@ import {
 import Badge, {BadgeColor} from "../ui/badge/Badge";
 import {Product} from "@/api/Type";
 import React, {useEffect, useState} from "react";
-import { searchProduct} from "@/api/productApi";
+import {searchProduct, updateStatus} from "@/api/productApi";
 import {formatCurrencyVND} from "@/heppler/convertMony";
 import ActionMutiDropDown from "@/components/product/ActionMutiDropDown";
 import {toast} from "react-toastify";
@@ -111,6 +111,23 @@ export default function ProductTable() {
     setSearch("");
     setBodySearch({})
   }
+
+  async function handleChange(productId: string, status: string) {
+    try {
+      const response = await updateStatus(productId, status); // gọi API cập nhật
+
+      setProducts((prev) =>
+          prev.map((product) =>
+              product.id === productId ? { ...product, status } : product
+          )
+      );
+      toast.success("Cập nhật trạng thái thành công!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Có lỗi xảy ra!");
+    }
+  }
+
   return (
     <div>
       <Link href={"/manager/manager-product/create-product"} >
@@ -241,7 +258,7 @@ export default function ProductTable() {
                           </Badge>
                         </TableCell>
                         <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400 relative">
-                          <ActionMutiDropDown productId={product.id}/>
+                          <ActionMutiDropDown productId={product.id}  callBackChange={handleChange}/>
                         </TableCell>
                       </TableRow>
                   ))}

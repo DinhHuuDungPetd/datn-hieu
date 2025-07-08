@@ -68,4 +68,14 @@ public class ProductManagerApi {
             .build();
   }
 
+  @PutMapping("{productId}/change-status")
+  public ApiResponse<ProductResponse> updateProductStatus(
+      @PathVariable(name = "productId") String productId,
+      @RequestParam(required = true) String status
+  ){
+    return ApiResponse.<ProductResponse>builder()
+        .result(productService.changeStatus(productId, status))
+        .build();
+  }
+
 }

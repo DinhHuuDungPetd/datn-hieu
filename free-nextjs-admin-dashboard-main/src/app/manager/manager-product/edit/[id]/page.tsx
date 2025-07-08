@@ -6,7 +6,7 @@ export default function Page(){
   return (
       <div>
         <PageBreadcrumb pageTitle="Thêm sản phẩm mới" />
-        <EditProductForm />
+        <EditProductForm/>
       </div>
   )
 }

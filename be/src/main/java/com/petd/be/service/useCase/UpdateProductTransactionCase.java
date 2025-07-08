@@ -53,7 +53,6 @@ public class UpdateProductTransactionCase {
           .product(product)
           .quantity(productItemRequest.getQuantity())
           .imageUrl(productItemRequest.getImageUrl())
-          .createdBy(createBy)
           .build();
       productItems.add(productItem);
     });
@@ -64,7 +63,6 @@ public class UpdateProductTransactionCase {
           .url(productImageRequest.getUrl())
           .product(product)
           .isMain(productImageRequest.getIsMain())
-          .createdBy(createBy)
           .build();
       productImages.add(productImage);
     });

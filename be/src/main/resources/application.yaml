@@ -13,7 +13,7 @@ spring:
   application:
     name: be
   datasource:
-    url: "jdbc:mysql://160.250.137.207:3306/datn-hieu-db?createDatabaseIfNotExist=true"
+    url: "jdbc:mysql://localhost:3306/datn-hieu-db?createDatabaseIfNotExist=true"
     driverClassName: "com.mysql.cj.jdbc.Driver"
     username: root
     password: root
@@ -24,4 +24,4 @@ spring:
 
 jwt:
     secret: "qEHFsTyk3Q9vse038kGWG+WGN56HxqvgI3h3DRBqf1w="
-    expiration: 3600000
+    expiration: 360000000

@@ -25,6 +25,7 @@ import com.petd.be.repository.ProductItemRepository;
 import com.petd.be.repository.ProductRepository;
 import com.petd.be.service.useCase.CreateProductTransactionCase;
 import com.petd.be.specification.ProductSpecification;
+import com.petd.be.until.ProductStatus;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -97,6 +98,23 @@ public class ProductService {
     return productPage.map(this::toProductResponse);
   }
 
+  public ProductResponse changeStatus(String productId, String status) {
+    try {
+      ProductStatus productStatus = ProductStatus.valueOf(status.toUpperCase());
+      // Giả định có hàm tìm và cập nhật sản phẩm
+      Product product = productRepository.findById(productId)
+          .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+      product.setStatus(productStatus.toString());
+      productRepository.save(product);
+      return toProductResponse(product);
+    } catch (IllegalArgumentException e) {
+      throw new AppException(ErrorCode.FORBIDDEN_ACTION);
+    } catch (Exception e) {
+      throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+    }
+  }
+
+
 
   public ProductResponse toProductResponse(Product product) {
     ProductResponse productResponse = ProductResponse.builder()
@@ -167,6 +185,7 @@ public class ProductService {
         .quantity(productItem.getQuantity())
         .color(colorResponse)
         .size(sizeResponse)
+        .isActive(productItem.getIsActive())
         .imageUrl(productItem.getImageUrl())
         .createdBy(productItem.getCreatedBy())
         .updatedAt(productItem.getUpdatedAt())
