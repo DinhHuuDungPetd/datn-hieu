@@ -62,3 +62,15 @@ export const updateStatus = async (productId: string, status: string): Promise<P
     throw new Error(extractErrorMessage(error));
   }
 };
+
+export const updateProduct = async (productId: string, product: any): Promise<Product> => {
+  try {
+    const response = await AxiosInstance.put<ApiResponse<Product>>(
+      `/manager/product/${productId}/update`,
+      product
+    );
+    return response.data.result;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
+  }
+};

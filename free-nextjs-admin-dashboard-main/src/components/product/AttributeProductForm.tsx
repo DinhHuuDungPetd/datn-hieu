@@ -1,6 +1,6 @@
 "use client";
 
-import React, {useEffect, useRef, useState} from "react";
+import React, { useEffect, useState } from "react";
 import ColorProductForm from "@/components/product/_ui/ColorProductForm";
 import {Attribute, Color, Size} from "@/api/Type";
 import {getAttributeProduct} from "@/api/attributeApi";
@@ -16,7 +16,7 @@ type Props = {
   }) => void;
 };
 
-export default function AttributeProductForm({ onChange, initialData }: Props) {
+const AttributeProductForm = React.memo(function AttributeProductForm({ onChange, initialData }: Props) {
   const [selectedColors, setSelectedColors] = useState<{ color: Color; image: File | null }[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<Size[]>([]);
   const [attribute, setAttribute] = useState<Attribute>({colors: [], sizes: []});
@@ -119,4 +119,6 @@ export default function AttributeProductForm({ onChange, initialData }: Props) {
         </div>
       </div>
   );
-}
+});
+
+export default AttributeProductForm;

@@ -8,7 +8,14 @@ import Button from "@/components/ui/button/Button";
 import {PackagePlus} from "lucide-react";
 import {toast} from "react-toastify";
 import {uploadImageToCloudinary} from "@/api/cloudinaryApi";
-import {createProduct} from "@/api/productApi";
+import {createProduct, getProductDetails} from "@/api/productApi";
+import {useSearchParams,useRouter} from "next/navigation";
+import {
+  extractAttributesFromProductItems,
+  ExtractedImages,
+  extractImagesFromProduct, urlToFile
+} from "@/heppler/extractImagesFromProduct";
+
 
 
 const SECTIONS = [
@@ -27,14 +34,78 @@ export type Variant = {
 
 export default function CreateProductForm() {
 
+  const searchParams = useSearchParams();
+  const productId = searchParams.get('copy_product_id') as string;
+  const router = useRouter();
+
   const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [basicInfo, setBasicInfo] = useState<any>(null);
   const [attributes, setAttributes] = useState<any>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initBaseInfo, setInitBaseInfo] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [initAttribute, setInitAttribute] = useState<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAndFill() {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const productDetails = await getProductDetails(productId);
+        // Extract images for BasicInfoProductForm
+        const { mainImageUrl, subImageUrls }: ExtractedImages = extractImagesFromProduct(productDetails.images);
+        // Extract attributes for AttributeProductForm
+        const attributesData = await extractAttributesFromProductItems(productDetails.productItems);
+        // Prepare variants: ensure image is File|null
+        const variantPromises = productDetails.productItems.map(async (item: any) => {
+          let image: File | null = null;
+          if (item.imageUrl) {
+            try {
+              image = await urlToFile(item.imageUrl, `variant-${item.color.id}-${item.size.id}.jpg`);
+            } catch (e) {
+              // Nếu lỗi vẫn cho null, không crash
+              image = null;
+            }
+          }
+          return {
+            color: item.color,
+            size: item.size,
+            image,
+            price: item.price ?? 0,
+            quantity: item.quantity ?? 0,
+          };
+        });
+        const variantsData = await Promise.all(variantPromises);
+        if (!isMounted) return;
+        setInitBaseInfo({
+          mainImageUrl,
+          subImageUrls,
+          productName: productDetails.productName,
+          description: productDetails.description,
+        });
+        setInitAttribute(attributesData);
+        setVariants(variantsData);
+      } catch (err: any) {
+        setLoadError("Không thể tải dữ liệu sản phẩm. Vui lòng thử lại.");
+        setInitBaseInfo(null);
+        setInitAttribute(null);
+        setVariants([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchAndFill();
+    return () => { isMounted = false; };
+  }, [productId]);
+
+
   // Scrollspy logic
   useEffect(() => {
+
     const handleScroll = () => {
       const scrollPosition = window.scrollY + 120; // offset for sticky header
       let currentSection = SECTIONS[0].id;
@@ -55,7 +126,6 @@ export default function CreateProductForm() {
   useEffect(() => {
     if (attributes) {
       const newVariants = generateVariants();
-      console.log(newVariants);
       setVariants(newVariants);
     }
   }, [attributes]);
@@ -130,7 +200,7 @@ export default function CreateProductForm() {
         productItems,
       };
       await createProduct(productRequest);
-      toast.success("Thành công!");
+      router.push(`/manager/manager-product`);
     }catch(error){
       console.log(error)
       toast.error("có lỗi xảy ra!");
@@ -220,16 +290,21 @@ export default function CreateProductForm() {
     const variants: Variant[] = [];
     selectedColors.forEach((color: any) => {
       selectedSizes.forEach((size: any) => {
-        const variant: Variant =  {
+        // Tìm variant cũ (nếu có)
+        const old = variants.find(
+          (v) => v.color.id === color.color.id && v.size.id === size.id
+        ) || (Array.isArray(variants) && variants.length > 0 ? variants.find(
+          (v) => v.color.id === color.color.id && v.size.id === size.id
+        ) : undefined);
+        variants.push({
           color: color?.color ?? null,
-          size : size,
+          size: size,
           image: color.image,
-          price: 0,
-          quantity: 0,
-        }
-        variants.push(variant);
-      })
-    })
+          price: old?.price ?? 0,
+          quantity: old?.quantity ?? 0,
+        });
+      });
+    });
     return variants;
   };
   return (
@@ -266,7 +341,7 @@ export default function CreateProductForm() {
                 className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
             >
               <h2 className="font-semibold text-lg mb-4">Thông tin cơ bản</h2>
-              <BasicInfoProductForm onChange={setBasicInfo} />
+              <BasicInfoProductForm onChange={setBasicInfo} initialData={initBaseInfo} />
             </div>
 
             {/* Section: Product details */}
@@ -276,7 +351,7 @@ export default function CreateProductForm() {
                 className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
             >
               <h2 className="font-semibold text-lg mb-4">Thuộc tính sản phẩm</h2>
-              <AttributeProductForm onChange={setAttributes} initialData={attributes} />
+              <AttributeProductForm onChange={setAttributes} initialData={initAttribute} />
             </div>
             {/* Section: Sales information */}
             <div

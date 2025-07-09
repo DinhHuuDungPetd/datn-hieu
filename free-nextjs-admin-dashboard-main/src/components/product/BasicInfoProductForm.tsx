@@ -1,6 +1,6 @@
 "use client";
 
-import React, {useEffect, useState} from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ImageDropZone from "@/components/product/_ui/ImageDropZone";
 import Label from "@/components/form/Label";
 import Input from "@/components/form/input/InputField";
@@ -23,45 +23,39 @@ type Props = {
   }) => void;
 };
 
-export default function BasicInfoProductForm({ onChange , initialData}: Props) {
+const BasicInfoProductForm = React.memo(function BasicInfoProductForm({ onChange, initialData }: Props) {
   const [mainImage, setMainImage] = useState<File | null>(null);
   const [subImages, setSubImages] = useState<(File | null)[]>(Array(8).fill(null));
   const [productName, setProductName] = useState<string>("");
   const [description, setDescription] = useState<string>("");
-
   const [errors, setErrors] = useState({
     name: false,
     description: false,
     images: false,
   });
+  const didInit = useRef(false);
 
   useEffect(() => {
-    const loadImagesFromUrls = async () => {
-      if (!initialData) return;
-
-      // Đổ text
-      setProductName(initialData.productName);
-      setDescription(initialData.description);
-
-      // Load ảnh chính
+    if (!initialData || didInit.current) return;
+    didInit.current = true;
+    setProductName(initialData.productName || "");
+    setDescription(initialData.description || "");
+    (async () => {
       if (initialData.mainImageUrl) {
         const main = await urlToFile(initialData.mainImageUrl, "main.jpg");
         setMainImage(main);
       }
-      // Ảnh phụ
       if (Array.isArray(initialData.subImageUrls)) {
         const subImageFiles = await Promise.all(
-            initialData.subImageUrls.map((url, idx) => urlToFile(url, `sub-${idx}.jpg`))
+          initialData.subImageUrls.map((url, idx) => urlToFile(url, `sub-${idx}.jpg`))
         );
-
         const filledSubImages = Array(8).fill(null);
         subImageFiles.forEach((file, idx) => {
           filledSubImages[idx] = file;
         });
         setSubImages(filledSubImages);
       }
-    };
-    loadImagesFromUrls();
+    })();
   }, [initialData]);
 
   const validate = () => {
@@ -136,6 +130,7 @@ export default function BasicInfoProductForm({ onChange , initialData}: Props) {
 
   useEffect(() => {
     onChange({ productName, description, mainImage, subImages });
+    // eslint-disable-next-line
   }, [productName, description, mainImage, subImages]);
 
   const handleSubmit = () => {
@@ -200,4 +195,6 @@ export default function BasicInfoProductForm({ onChange , initialData}: Props) {
         </div>
       </div>
   );
-}
+});
+
+export default BasicInfoProductForm;

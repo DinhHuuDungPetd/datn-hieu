@@ -1,5 +1,5 @@
 "use client"
-import {useRef, useEffect, useState} from "react";
+import {useRef, useEffect, useState, useCallback} from "react";
 import BasicInfoProductForm from "@/components/product/BasicInfoProductForm";
 import AttributeProductForm from "@/components/product/AttributeProductForm";
 import {Color, Size} from "@/api/Type";
@@ -8,12 +8,13 @@ import Button from "@/components/ui/button/Button";
 import {PackagePlus} from "lucide-react";
 import {toast} from "react-toastify";
 import {uploadImageToCloudinary} from "@/api/cloudinaryApi";
-import {createProduct, getProductDetails} from "@/api/productApi";
-import {useParams} from "next/navigation";
+import {updateProduct, getProductDetails} from "@/api/productApi";
+import {useParams , useRouter} from "next/navigation";
 import {
   extractAttributesFromProductItems,
   ExtractedImages,
-  extractImagesFromProduct
+  extractImagesFromProduct,
+  urlToFile,
 } from "@/heppler/extractImagesFromProduct";
 
 
@@ -32,54 +33,102 @@ export type Variant = {
 };
 
 export default function EditProductForm() {
-
   const params = useParams();
   const productId = params?.id as string;
+  const router = useRouter();
+
   const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [basicInfo, setBasicInfo] = useState<any>(null);
   const [attributes, setAttributes] = useState<any>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Scrollspy logic
-  useEffect(() => {
-    (async () =>{
-      const productDetails = await getProductDetails(productId);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [initBaseInfo, setInitBaseInfo] = useState<any>(null);
+  const [initAttribute, setInitAttribute] = useState<any>(null);
 
-      const { mainImageUrl, subImageUrls } : ExtractedImages = extractImagesFromProduct(productDetails.images);
-      setBasicInfo({
-        mainImageUrl,
-        subImageUrls,
-        productName: productDetails.productName,
-        description: productDetails.description,
-      })
-      const attributes = await extractAttributesFromProductItems(productDetails.productItems);
-      setAttributes(attributes);
-    })()
-    const handleScroll = () => {
-      const scrollPosition = window.scrollY + 120; // offset for sticky header
-      let currentSection = SECTIONS[0].id;
-      for (const section of SECTIONS) {
-        const ref = sectionRefs.current[section.id];
-        if (ref) {
-          const { top } = ref.getBoundingClientRect();
-          if (top + window.scrollY - 100 <= scrollPosition) {
-            currentSection = section.id;
+  // Fill form data from API
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAndFill() {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const productDetails = await getProductDetails(productId);
+        // Extract images for BasicInfoProductForm
+        const { mainImageUrl, subImageUrls }: ExtractedImages = extractImagesFromProduct(productDetails.images);
+        // Extract attributes for AttributeProductForm
+        const attributesData = await extractAttributesFromProductItems(productDetails.productItems);
+        // Prepare variants: ensure image is File|null
+        const variantPromises = productDetails.productItems.map(async (item: any) => {
+          let image: File | null = null;
+          if (item.imageUrl) {
+            try {
+              image = await urlToFile(item.imageUrl, `variant-${item.color.id}-${item.size.id}.jpg`);
+            } catch (e) {
+              // Nếu lỗi vẫn cho null, không crash
+              image = null;
+            }
           }
-        }
+          return {
+            color: item.color,
+            size: item.size,
+            image,
+            price: item.price ?? 0,
+            quantity: item.quantity ?? 0,
+          };
+        });
+        const variantsData = await Promise.all(variantPromises);
+        if (!isMounted) return;
+        setInitBaseInfo({
+          mainImageUrl,
+          subImageUrls,
+          productName: productDetails.productName,
+          description: productDetails.description,
+        });
+        setInitAttribute(attributesData);
+        setVariants(variantsData);
+      } catch (err: any) {
+        setLoadError("Không thể tải dữ liệu sản phẩm. Vui lòng thử lại.");
+        setBasicInfo(null);
+        setAttributes(null);
+        setVariants([]);
+      } finally {
+        setIsLoading(false);
       }
-      setActiveSection(currentSection);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-  useEffect(() => {
-    if (attributes) {
-      const newVariants = generateVariants();
-      setVariants(newVariants);
     }
-  }, [attributes]);
+    fetchAndFill();
+    return () => { isMounted = false; };
+  }, [productId]);
 
+  // Khi attributes thay đổi (user chỉnh thuộc tính), sinh lại variants (giống create)
+  useEffect(() => {
+    if (!attributes) return;
+    // Nếu đang loading từ API thì không generate lại
+    if (isLoading) return;
+    // Nếu user chỉnh thuộc tính, generate lại variants
+    const { selectedSizes, selectedColors } = attributes;
+    if (!selectedSizes || !selectedColors) return;
+    const newVariants: Variant[] = [];
+    selectedColors.forEach((color: any) => {
+      selectedSizes.forEach((size: any) => {
+        // Nếu đã có variant cũ, giữ lại price/quantity/image
+        const old = variants.find(
+          (v) => v.color.id === color.color.id && v.size.id === size.id
+        );
+        newVariants.push({
+          color: color.color,
+          size,
+          image: color.image ?? old?.image ?? null,
+          price: old?.price ?? 0,
+          quantity: old?.quantity ?? 0,
+        });
+      });
+    });
+    setVariants(newVariants);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attributes]);
 
 
   const handleSubmit = async () => {
@@ -149,8 +198,8 @@ export default function EditProductForm() {
         images,
         productItems,
       };
-      await createProduct(productRequest);
-      toast.success("Thành công!");
+      await updateProduct(productId, productRequest);
+      router.push(`/manager/manager-product`);
     }catch(error){
       console.log(error)
       toast.error("có lỗi xảy ra!");
@@ -158,6 +207,10 @@ export default function EditProductForm() {
       setIsSubmitting(false);
     }
   };
+
+  const handleBasicInfoChange = useCallback((data: any) => setBasicInfo(data), []);
+  const handleAttributesChange = useCallback((data: any) => setAttributes(data), []);
+  const handleVariantsChange = useCallback((data: any) => setVariants(data), []);
 
   const buildImages = async (main: File, subs: File[]) => {
     const images : {
@@ -208,7 +261,6 @@ export default function EditProductForm() {
     return productItems;
   }
 
-
   const validateVariants = (variants: Variant[]): string | null => {
     if (!variants || variants.length === 0) {
       return "Cần ít nhất 1 biến thể.";
@@ -251,73 +303,84 @@ export default function EditProductForm() {
     return variants;
   };
   return (
-      <div>
+    <div>
+      {isLoading && (
+        <div className="fixed inset-0 z-99999 flex items-center justify-center bg-gray-300 bg-opacity-40">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
+            <span className="text-white text-sm font-medium">Đang tải dữ liệu sản phẩm...</span>
+          </div>
+        </div>
+      )}
+      {loadError && (
+        <div className="text-center text-red-600 font-semibold my-8">{loadError}</div>
+      )}
+      <div className={isLoading ? 'pointer-events-none opacity-50' : ''}>
         <div className="flex justify-end items-center mb-2">
-          <Button size={"xs"} variant={"add"} startIcon={<PackagePlus/>} onClick={handleSubmit}>Thêm</Button>
+          <Button size={"xs"} variant={"add"} startIcon={<PackagePlus/>} onClick={handleSubmit} disabled={isLoading}>Lưu</Button>
         </div>
         <div className="flex gap-8 w-full  mx-auto">
           {/* Sidebar */}
           <aside className="w-64 flex-shrink-0 sticky top-24 self-start bg-white border border-gray-200 rounded-xl p-4 h-fit">
             <nav className="flex flex-col gap-2">
               {SECTIONS.map((section) => (
-                  <a
-                      key={section.id}
-                      href={`#${section.id}`}
-                      className={`px-3 py-2 rounded-lg transition font-medium text-sm cursor-pointer ${
-                          activeSection === section.id
-                              ? "bg-brand-100 text-brand-600 dark:bg-brand-900 dark:text-brand-200"
-                              : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10"
-                      }`}
-                  >
-                    {section.label}
-                  </a>
+                <a
+                  key={section.id}
+                  href={`#${section.id}`}
+                  className={`px-3 py-2 rounded-lg transition font-medium text-sm cursor-pointer ${
+                    activeSection === section.id
+                      ? "bg-brand-100 text-brand-600 dark:bg-brand-900 dark:text-brand-200"
+                      : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10"
+                  }`}
+                >
+                  {section.label}
+                </a>
               ))}
             </nav>
           </aside>
-
           {/* Main content */}
           <div className="flex-1 flex flex-col gap-10">
             {/* Section: Basic information */}
             <div
-                id="basic-info"
-                ref={el => { sectionRefs.current["basic-info"] = el; }}
-                className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
+              id="basic-info"
+              ref={el => { sectionRefs.current["basic-info"] = el; }}
+              className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
             >
               <h2 className="font-semibold text-lg mb-4">Thông tin cơ bản</h2>
-              <BasicInfoProductForm onChange={setBasicInfo} initialData={basicInfo} />
+              <BasicInfoProductForm onChange={handleBasicInfoChange} initialData={initBaseInfo} />
             </div>
-
             {/* Section: Product details */}
             <div
-                id="product-details"
-                ref={el => { sectionRefs.current["product-details"] = el; }}
-                className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
+              id="product-details"
+              ref={el => { sectionRefs.current["product-details"] = el; }}
+              className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
             >
               <h2 className="font-semibold text-lg mb-4">Thuộc tính sản phẩm</h2>
-              <AttributeProductForm onChange={setAttributes} initialData={attributes} />
+              <AttributeProductForm onChange={handleAttributesChange} initialData={initAttribute} />
             </div>
             {/* Section: Sales information */}
             <div
-                id="sales-info"
-                ref={el => { sectionRefs.current["sales-info"] = el; }}
-                className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
+              id="sales-info"
+              ref={el => { sectionRefs.current["sales-info"] = el; }}
+              className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
             >
               <h2 className="font-semibold text-lg mb-4">Giá & kho</h2>
               <SalesInfoForm
-                  variants={variants}
-                  onChange={setVariants}
+                variants={variants}
+                onChange={handleVariantsChange}
               />
             </div>
           </div>
         </div>
         {isSubmitting && (
-            <div className="fixed inset-0 z-99999 flex items-center justify-center bg-gray-300 bg-opacity-40">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
-                <span className="text-white text-sm font-medium">Đang xử lý, vui lòng đợi...</span>
-              </div>
+          <div className="fixed inset-0 z-99999 flex items-center justify-center bg-gray-300 bg-opacity-40">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
+              <span className="text-white text-sm font-medium">Đang xử lý, vui lòng đợi...</span>
             </div>
+          </div>
         )}
       </div>
+    </div>
   );
 }

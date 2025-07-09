@@ -24,6 +24,7 @@ import com.petd.be.repository.ProductImageRepository;
 import com.petd.be.repository.ProductItemRepository;
 import com.petd.be.repository.ProductRepository;
 import com.petd.be.service.useCase.CreateProductTransactionCase;
+import com.petd.be.service.useCase.UpdateProductTransactionCase;
 import com.petd.be.specification.ProductSpecification;
 import com.petd.be.until.ProductStatus;
 import jakarta.transaction.Transactional;
@@ -56,12 +57,17 @@ public class ProductService {
   ColorService colorService;
   SizeService sizeService;
   CreateProductTransactionCase createProductTransactionCase;
+  UpdateProductTransactionCase updateProductTransactionCase;
 
-  @Transactional
   public ProductDetailsResponse createProduct(ProductRequest productRequest) {
     User user = userService.getUserLogin();
     String createBy = user == null ? "System" : user.getEmail();
     return toProductDetailsResponse(createProductTransactionCase.createProduct(productRequest, createBy));
+  }
+
+  public ProductDetailsResponse updateProduct(ProductRequest productRequest, String productId) {
+    User user = userService.getUserLogin();
+    return toProductDetailsResponse(updateProductTransactionCase.updateProduct(productRequest, productId));
   }
 
   public ProductDetailsResponse getProductDetails(String productId) {

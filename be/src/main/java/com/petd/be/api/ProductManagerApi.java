@@ -60,6 +60,14 @@ public class ProductManagerApi {
         .result(productService.createProduct(request))
         .build();
   }
+  @PutMapping("/{productId}/update")
+  public ApiResponse<ProductDetailsResponse> updateProduct(
+      @RequestBody ProductRequest request,
+      @PathVariable String productId) {
+    return ApiResponse.<ProductDetailsResponse>builder()
+        .result(productService.updateProduct(request, productId))
+        .build();
+  }
 
   @GetMapping("/{productId}")
   public ApiResponse<ProductDetailsResponse> getProductDetails(@PathVariable String productId) {

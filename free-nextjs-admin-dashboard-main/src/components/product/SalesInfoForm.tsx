@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Variant } from "@/components/product/CreateProductForm";
 
 type Props = {
@@ -6,19 +6,19 @@ type Props = {
   onChange: (variants: Variant[]) => void;
 };
 
-export default function SalesInfoForm({ variants, onChange }: Props) {
+const SalesInfoForm = React.memo(function SalesInfoForm({ variants, onChange }: Props) {
   const [selectedColorId, setSelectedColorId] = useState("");
   const [selectedSizeId, setSelectedSizeId] = useState("");
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
 
-  const handleChange = (index: number, field: "price" | "quantity", value: string) => {
+  const handleChange = useCallback((index: number, field: "price" | "quantity", value: string) => {
     const updated: Variant[] = [...variants];
     updated[index][field] = value === "" ? null : Number(value);
     onChange(updated);
-  };
+  }, [variants, onChange]);
 
-  const applyToVariants = () => {
+  const applyToVariants = useCallback(() => {
     const updated = variants.map((variant) => {
       const matchColor =
           selectedColorId === "" || variant.color.id === selectedColorId;
@@ -35,7 +35,7 @@ export default function SalesInfoForm({ variants, onChange }: Props) {
     });
 
     onChange(updated);
-  };
+  }, [variants, selectedColorId, selectedSizeId, price, quantity, onChange]);
 
   const colors = Array.from(
       new Map(variants.map((v) => [v.color.id, v.color])).values()
@@ -148,4 +148,6 @@ export default function SalesInfoForm({ variants, onChange }: Props) {
         </table>
       </div>
   );
-}
+});
+
+export default SalesInfoForm;
