@@ -3,12 +3,21 @@ import React, { useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import {View, Pencil, Files, Check, Unplug, PackageX} from "lucide-react";
+import {toast} from "react-toastify";
 
 type props = {
-  productId: string
+  productId: string,
+  callBackChange : Function,
 }
+const ProductStatus = {
+  DRAFT: "DRAFT",
+  ACTIVE: "ACTIVE",
+  OUT_OF_STOCK: "OUT_OF_STOCK",
+  INACTIVE: "INACTIVE"
+};
 
-export default function ActionMutiDropDown({ productId }: props) {
+
+export default function ActionMutiDropDown({ productId, callBackChange }: props) {
   const [isOpen, setIsOpen] = useState(false);
 
   function toggleDropdown(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
@@ -19,6 +28,7 @@ export default function ActionMutiDropDown({ productId }: props) {
   function closeDropdown() {
     setIsOpen(false);
   }
+
   return (
       <div className="relative">
         <button
@@ -86,33 +96,30 @@ export default function ActionMutiDropDown({ productId }: props) {
                 Sao chép
               </DropdownItem>
             </li>
-            <li>
+            <li onClick={() => callBackChange(productId, ProductStatus.ACTIVE)} >
               <DropdownItem
                   onItemClick={closeDropdown}
-                  tag="a"
-                  href="/profile"
+                  tag="button"
                   className="flex items-center gap-3 font-medium text-gray-700 rounded-lg group text-theme-xs hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
               >
                 <Check size={18} />
                 Hoạt động
               </DropdownItem>
             </li>
-            <li>
+            <li onClick={() => callBackChange(productId, ProductStatus.INACTIVE)}>
               <DropdownItem
                   onItemClick={closeDropdown}
-                  tag="a"
-                  href="/profile"
+                  tag="button"
                   className="flex items-center gap-3 font-medium text-gray-700 rounded-lg group text-theme-xs hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
               >
                 <Unplug size={18} />
                 Ngừng bán
               </DropdownItem>
             </li>
-            <li>
+            <li onClick={() => callBackChange(productId, ProductStatus.OUT_OF_STOCK)}>
               <DropdownItem
                   onItemClick={closeDropdown}
-                  tag="a"
-                  href="/profile"
+                  tag="button"
                   className="flex items-center gap-3 font-medium text-gray-700 rounded-lg group text-theme-xs hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
               >
                 <PackageX size={18} />

@@ -136,18 +136,21 @@ public class DataInitializer implements CommandLineRunner {
     int count = 0;
     for (String productName: productNames ){
       List<ProductItemRequest> productItemRequests = new ArrayList<>();
+      Boolean isActive = false;
       for(String colorId: colorIds){
         for(String sizeId: sizeIds) {
           long randomPrice = ThreadLocalRandom.current().nextLong(50_000, 150_001);
           ProductItemRequest productItemRequest = ProductItemRequest.builder()
               .colorId(colorId)
               .sizeId(sizeId)
-                .price(BigDecimal.valueOf(randomPrice))
+              .price(BigDecimal.valueOf(randomPrice))
+              .active(isActive)
               .quantity(1000L)
               .imageUrl(
                   "https://assets.adidas.com/images/h_2000,f_auto,q_auto,fl_lossy,c_fill,g_auto/85a4a6c2c27e495895d8c259d8c9fbd1_9366/Real_Madrid_Terrace_Icons_Jersey_Blue_JN3060_02_laydown.jpg")
               .build();
           productItemRequests.add(productItemRequest);
+          isActive = !isActive;
         }
       }
       List<ProductImageRequest> productImageRequests = createProductImages(productImageUrls.get(count));

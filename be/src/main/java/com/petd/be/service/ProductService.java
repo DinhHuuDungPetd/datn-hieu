@@ -24,7 +24,9 @@ import com.petd.be.repository.ProductImageRepository;
 import com.petd.be.repository.ProductItemRepository;
 import com.petd.be.repository.ProductRepository;
 import com.petd.be.service.useCase.CreateProductTransactionCase;
+import com.petd.be.service.useCase.UpdateProductTransactionCase;
 import com.petd.be.specification.ProductSpecification;
+import com.petd.be.until.ProductStatus;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -55,12 +57,17 @@ public class ProductService {
   ColorService colorService;
   SizeService sizeService;
   CreateProductTransactionCase createProductTransactionCase;
+  UpdateProductTransactionCase updateProductTransactionCase;
 
-  @Transactional
   public ProductDetailsResponse createProduct(ProductRequest productRequest) {
     User user = userService.getUserLogin();
     String createBy = user == null ? "System" : user.getEmail();
     return toProductDetailsResponse(createProductTransactionCase.createProduct(productRequest, createBy));
+  }
+
+  public ProductDetailsResponse updateProduct(ProductRequest productRequest, String productId) {
+    User user = userService.getUserLogin();
+    return toProductDetailsResponse(updateProductTransactionCase.updateProduct(productRequest, productId));
   }
 
   public ProductDetailsResponse getProductDetails(String productId) {
@@ -96,6 +103,23 @@ public class ProductService {
     Page<Product> productPage = productRepository.findAll(spec, pageable);
     return productPage.map(this::toProductResponse);
   }
+
+  public ProductResponse changeStatus(String productId, String status) {
+    try {
+      ProductStatus productStatus = ProductStatus.valueOf(status.toUpperCase());
+      // Giả định có hàm tìm và cập nhật sản phẩm
+      Product product = productRepository.findById(productId)
+          .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+      product.setStatus(productStatus.toString());
+      productRepository.save(product);
+      return toProductResponse(product);
+    } catch (IllegalArgumentException e) {
+      throw new AppException(ErrorCode.FORBIDDEN_ACTION);
+    } catch (Exception e) {
+      throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+    }
+  }
+
 
 
   public ProductResponse toProductResponse(Product product) {
@@ -167,6 +191,7 @@ public class ProductService {
         .quantity(productItem.getQuantity())
         .color(colorResponse)
         .size(sizeResponse)
+        .isActive(productItem.getIsActive())
         .imageUrl(productItem.getImageUrl())
         .createdBy(productItem.getCreatedBy())
         .updatedAt(productItem.getUpdatedAt())

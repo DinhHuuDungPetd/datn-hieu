@@ -19,6 +19,7 @@ public class ProductItemResponse {
   SizeResponse size;
   BigDecimal price;
   Long quantity;
+  boolean isActive;
   String imageUrl;
   LocalDateTime createdAt;
   LocalDateTime updatedAt;

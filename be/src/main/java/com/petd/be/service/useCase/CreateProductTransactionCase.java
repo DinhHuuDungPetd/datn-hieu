@@ -54,6 +54,7 @@ public class CreateProductTransactionCase {
           .size(size)
           .price(productItemRequest.getPrice())
           .product(product)
+          .isActive(productItemRequest.getActive())
           .quantity(productItemRequest.getQuantity())
           .imageUrl(productItemRequest.getImageUrl())
           .createdBy(createBy)

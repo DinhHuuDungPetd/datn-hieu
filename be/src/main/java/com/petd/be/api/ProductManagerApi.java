@@ -60,12 +60,30 @@ public class ProductManagerApi {
         .result(productService.createProduct(request))
         .build();
   }
+  @PutMapping("/{productId}/update")
+  public ApiResponse<ProductDetailsResponse> updateProduct(
+      @RequestBody ProductRequest request,
+      @PathVariable String productId) {
+    return ApiResponse.<ProductDetailsResponse>builder()
+        .result(productService.updateProduct(request, productId))
+        .build();
+  }
 
   @GetMapping("/{productId}")
   public ApiResponse<ProductDetailsResponse> getProductDetails(@PathVariable String productId) {
     return ApiResponse.<ProductDetailsResponse>builder()
             .result(productService.getProductDetails(productId))
             .build();
+  }
+
+  @PutMapping("{productId}/change-status")
+  public ApiResponse<ProductResponse> updateProductStatus(
+      @PathVariable(name = "productId") String productId,
+      @RequestParam(required = true) String status
+  ){
+    return ApiResponse.<ProductResponse>builder()
+        .result(productService.changeStatus(productId, status))
+        .build();
   }
 
 }

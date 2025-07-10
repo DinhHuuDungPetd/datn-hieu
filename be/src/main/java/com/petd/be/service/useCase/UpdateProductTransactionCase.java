@@ -1,5 +1,7 @@
 package com.petd.be.service.useCase;
 
+import com.petd.be.dto.request.product.ProductImageRequest;
+import com.petd.be.dto.request.product.ProductItemRequest;
 import com.petd.be.dto.request.product.ProductRequest;
 import com.petd.be.entity.*;
 import com.petd.be.exception.AppException;
@@ -34,44 +36,74 @@ public class UpdateProductTransactionCase {
 
   @Transactional
   public Product updateProduct(ProductRequest productRequest, String productId) {
-    Product product =  productRepository.findById(productId)
-                    .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
+    log.info("Update product with id: " + productId);
+    Product product = productRepository.findById(productId)
+        .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND));
     product.setProductName(productRequest.getProductName());
     product.setDescription(productRequest.getDescription());
 
+    // --- UPDATE PRODUCT IMAGES ---
+    List<ProductImage> oldImages = product.getProductImages();
+    List<String> newImageUrls = productRequest.getImages().stream()
+        .map(ProductImageRequest::getUrl)
+        .toList();
+    productImageRepository.deleteAll(product.getProductImages());
+    // Thêm hoặc cập nhật ảnh mới
+    for (ProductImageRequest imgReq : productRequest.getImages()) {
+      ProductImage img = ProductImage.builder()
+          .url(imgReq.getUrl())
+          .isMain(imgReq.getIsMain())
+          .product(product)
+          .build();
+      productImageRepository.save(img);
+      oldImages.add(img);
+    }
+
+    // --- UPDATE PRODUCT ITEMS ---
+    List<ProductItem> oldItems = product.getProductItems();
+    List<String> newItemKeys = productRequest.getProductItems().stream()
+        .map(i -> i.getColorId() + "-" + i.getSizeId())
+            .toList();
+
+    for (ProductItem oldItem : oldItems) {
+      String key = oldItem.getColor().getId() + "-" + oldItem.getSize().getId();
+      if (!newItemKeys.contains(key)) {
+         oldItem.setIsActive(false);
+         productItemRepository.save(oldItem);
+      }
+    }
+
+    for (ProductItemRequest itemReq : productRequest.getProductItems()) {
+      String key = itemReq.getColorId() + "-" + itemReq.getSizeId();
+      ProductItem item = oldItems.stream()
+          .filter(i -> (i.getColor().getId() + "-" + i.getSize().getId()).equals(key))
+              .findFirst()
+              .orElse(null);
+      Color color = colorService.findById(itemReq.getColorId());
+      Size size = sizeService.findById(itemReq.getSizeId());
+      if (item == null) {
+        item = ProductItem.builder()
+            .color(color)
+            .size(size)
+            .price(itemReq.getPrice())
+            .product(product)
+            .quantity(itemReq.getQuantity())
+            .imageUrl(itemReq.getImageUrl())
+            .isActive(itemReq.getActive() != null ? itemReq.getActive() : true)
+            .build();
+        productItemRepository.save(item);
+        oldItems.add(item);
+      } else {
+        item.setPrice(itemReq.getPrice());
+        item.setQuantity(itemReq.getQuantity());
+        item.setImageUrl(itemReq.getImageUrl());
+        item.setIsActive(itemReq.getActive() != null ? itemReq.getActive() : true);
+        productItemRepository.save(item);
+      }
+    }
+    product.setProductImages(oldImages);
+    product.setProductItems(oldItems);
     productRepository.save(product);
-
-    List<ProductItem> productItems =product.getProductItems();
-
-    productRequest.getProductItems().forEach(productItemRequest -> {
-      Color color = colorService.findById(productItemRequest.getColorId());
-      Size size = sizeService.findById(productItemRequest.getSizeId());
-      ProductItem productItem = ProductItem.builder()
-          .color(color)
-          .size(size)
-          .price(productItemRequest.getPrice())
-          .product(product)
-          .quantity(productItemRequest.getQuantity())
-          .imageUrl(productItemRequest.getImageUrl())
-          .createdBy(createBy)
-          .build();
-      productItems.add(productItem);
-    });
-    productItemRepository.saveAll(productItems);
-    List<ProductImage> productImages = new ArrayList<>();
-    productRequest.getImages().forEach(productImageRequest -> {
-      ProductImage productImage = ProductImage.builder()
-          .url(productImageRequest.getUrl())
-          .product(product)
-          .isMain(productImageRequest.getIsMain())
-          .createdBy(createBy)
-          .build();
-      productImages.add(productImage);
-    });
-    productImageRepository.saveAll(productImages);
-    product.setProductItems(productItems);
-    product.setProductImages(productImages);
-
     return product;
   }
 

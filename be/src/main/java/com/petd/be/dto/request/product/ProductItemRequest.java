@@ -24,6 +24,7 @@ public class ProductItemRequest {
   String colorId;
   String sizeId;
   BigDecimal price;
+  Boolean active;
   Long quantity;
   String imageUrl;
 }

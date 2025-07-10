@@ -1,171 +1,110 @@
 "use client"
+import {useRef, useEffect, useState} from "react";
+import BasicInfoProductForm from "@/components/product/BasicInfoProductForm";
+import AttributeProductForm from "@/components/product/AttributeProductForm";
+import {Color, Size} from "@/api/Type";
+import SalesInfoForm from "@/components/product/SalesInfoForm";
 import Button from "@/components/ui/button/Button";
-import { PackagePlus } from "lucide-react";
-import React, {useRef, useEffect, useState, useMemo, useCallback} from "react";
-import DropImageProduct from "./DropImageProduct";
-import Input from "@/components/form/input/InputField";
-import Label from "@/components/form/Label";
-import Select from "@/components/form/Select";
-import {ChevronDownIcon} from "@/icons";
-import TextArea from "@/components/form/input/TextArea";
-import Checkbox from "@/components/form/input/Checkbox";
-import {getAttributeProduct} from "@/api/attributeApi";
-import { Size } from "@/api/Type";
-import ProductVariantTable from "./ProductVariantTable";
-import {createProduct, getProductDetails} from "@/api/productApi";
-import { uploadImageToCloudinary } from "@/api/cloudinaryApi";
+import {PackagePlus} from "lucide-react";
 import {toast} from "react-toastify";
-import {useRouter, useSearchParams} from "next/navigation";
-import {returnStatement} from "@babel/types";
+import {uploadImageToCloudinary} from "@/api/cloudinaryApi";
+import {createProduct, getProductDetails} from "@/api/productApi";
+import {useSearchParams,useRouter} from "next/navigation";
+import {
+  extractAttributesFromProductItems,
+  ExtractedImages,
+  extractImagesFromProduct, urlToFile
+} from "@/heppler/extractImagesFromProduct";
 
 
-const IMAGE_SLOT_COUNT = 9;
-
-const options = [
-  { value: "marketing", label: "Marketing" },
-  { value: "template", label: "Template" },
-  { value: "development", label: "Development" },
-];
 
 const SECTIONS = [
-  { id: "basic-info", label: "Basic information" },
-  { id: "product-details", label: "Product details" },
-  { id: "sales-info", label: "Sales information" }
+  { id: "basic-info", label: "Thông tin cơ bản" },
+  { id: "product-details", label: "Thuộc tính sản phẩm" },
+  { id: "sales-info", label: "Giá & kho" }
 ];
+
+export type Variant = {
+  color: Color;
+  image: File | null;
+  size: Size
+  price: number | null;
+  quantity: number | null;
+};
 
 export default function CreateProductForm() {
 
   const searchParams = useSearchParams();
-
-  const productId = searchParams.get("copy_product_id") as string;
-
-  const [images, setImages] = useState<(File | null)[]>(Array(IMAGE_SLOT_COUNT).fill(null));
-  const [previews, setPreviews] = useState<(string | null)[]>(Array(IMAGE_SLOT_COUNT).fill(null));
-  const [productName, setProductName] = useState("");
-  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
-  const [sizeOptions, setSizeOptions] = useState<Size[]>([]);
-  const [colorFields, setColorFields] = useState<any[]>([]);
-  const [description, setDescription] = useState("");
-  const [formErrors, setFormErrors] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false)
-
+  const productId = searchParams.get('copy_product_id') as string;
   const router = useRouter();
 
-  // Clean up previews on unmount
-  useEffect(() => {
-    return () => {
-      previews.forEach((url) => url && URL.revokeObjectURL(url));
-    };
-  }, [previews]);
+  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [basicInfo, setBasicInfo] = useState<any>(null);
+  const [attributes, setAttributes] = useState<any>(null);
+  const [variants, setVariants] = useState<Variant[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initBaseInfo, setInitBaseInfo] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [initAttribute, setInitAttribute] = useState<any>(null);
 
   useEffect(() => {
-    if(!productId) return;
-    (async () => {
+    let isMounted = true;
+    async function fetchAndFill() {
+      setIsLoading(true);
+      setLoadError(null);
       try {
-        const response = await getProductDetails(productId);
-        console.log(response)
-        setProductName(response.productName);
-        setDescription(response.description);
-
-        // Ảnh
-        const previewsArr = Array(IMAGE_SLOT_COUNT).fill(null);
-        response.images.forEach((img, idx) => {
-          previewsArr[idx] = img.url;
-        });
-        setPreviews(previewsArr);
-        setImages(Array(IMAGE_SLOT_COUNT).fill(null));
-
-        // Thuộc tính
-        const attribute = await getAttributeProduct();
-        const allColors = attribute.colors || [];
-        const allSizes = attribute.sizes || [];
-
-        const usedColorIds = [
-          ...new Set(response.productItems.map(item => item.color.id))
-        ];
-        const usedSizeIds = [
-          ...new Set(response.productItems.map(item => item.size.id))
-        ];
-
-        const colorFieldsArr = allColors.map(color => {
-          const item = response.productItems.find(i => i.color.id === color.id);
+        const productDetails = await getProductDetails(productId);
+        // Extract images for BasicInfoProductForm
+        const { mainImageUrl, subImageUrls }: ExtractedImages = extractImagesFromProduct(productDetails.images);
+        // Extract attributes for AttributeProductForm
+        const attributesData = await extractAttributesFromProductItems(productDetails.productItems);
+        // Prepare variants: ensure image is File|null
+        const variantPromises = productDetails.productItems.map(async (item: any) => {
+          let image: File | null = null;
+          if (item.imageUrl) {
+            try {
+              image = await urlToFile(item.imageUrl, `variant-${item.color.id}-${item.size.id}.jpg`);
+            } catch (e) {
+              // Nếu lỗi vẫn cho null, không crash
+              image = null;
+            }
+          }
           return {
-            value: color.id,
-            name: color.name,
-            checked: usedColorIds.includes(color.id),
-            image:  item?.imageUrl || null,
-            preview: item?.imageUrl || null
+            color: item.color,
+            size: item.size,
+            image,
+            price: item.price ?? 0,
+            quantity: item.quantity ?? 0,
           };
         });
-        console.log(colorFieldsArr)
-        setColorFields(colorFieldsArr);
-        setSelectedSizes(usedSizeIds);
-        setSizeOptions(allSizes);
-
-        // Biến thể
-        const variantDataObj: {
-          [key: string]: {
-            price: string;
-            quantity: string;
-          };
-        } = {};
-        response.productItems.forEach(item => {
-          const key = `${item.color.id}_${item.size.id}`;
-          variantDataObj[key] = {
-            price: item.price?.toString() || "",
-            quantity: item.quantity?.toString() || ""
-          };
+        const variantsData = await Promise.all(variantPromises);
+        if (!isMounted) return;
+        setInitBaseInfo({
+          mainImageUrl,
+          subImageUrls,
+          productName: productDetails.productName,
+          description: productDetails.description,
         });
-        setVariantData(variantDataObj);
-
-      } catch (e: any) {
-        console.log(e)
-        toast.error("sản phẩm không tồn tại");
+        setInitAttribute(attributesData);
+        setVariants(variantsData);
+      } catch (err: any) {
+        setLoadError("Không thể tải dữ liệu sản phẩm. Vui lòng thử lại.");
+        setInitBaseInfo(null);
+        setInitAttribute(null);
+        setVariants([]);
+      } finally {
+        setIsLoading(false);
       }
-    })();
+    }
+    fetchAndFill();
+    return () => { isMounted = false; };
   }, [productId]);
 
-  const handleDrop = useCallback(
-    (index: number) => (acceptedFiles: File[]) => {
-      if (acceptedFiles && acceptedFiles[0]) {
-        const newImages = [...images];
-        const newPreviews = [...previews];
-        if (newPreviews[index]) URL.revokeObjectURL(newPreviews[index]!);
-        newImages[index] = acceptedFiles[0];
-        newPreviews[index] = URL.createObjectURL(acceptedFiles[0]);
-        setImages(newImages);
-        setPreviews(newPreviews);
-      }
-    },
-    [images, previews]
-  );
-
-  const handleRemove = (index: number) => {
-    const newImages = [...images];
-    const newPreviews = [...previews];
-    if (newPreviews[index]) URL.revokeObjectURL(newPreviews[index]!);
-    newImages[index] = null;
-    newPreviews[index] = null;
-    setImages(newImages);
-    setPreviews(newPreviews);
-  };
 
   // Scrollspy logic
   useEffect(() => {
-    (async () => {
-      const attribute = await getAttributeProduct();
-      setSizeOptions(attribute.sizes || []);
-      // Khởi tạo colorFields từ API
-      setColorFields((attribute.colors || []).map((c: any) => ({
-        value: c.id,
-        name: c.name,
-        checked: false,
-        image: null,
-        preview: null
-      })));
-    })();
 
     const handleScroll = () => {
       const scrollPosition = window.scrollY + 120; // offset for sticky header
@@ -174,7 +113,7 @@ export default function CreateProductForm() {
         const ref = sectionRefs.current[section.id];
         if (ref) {
           const { top } = ref.getBoundingClientRect();
-          if (top + window.scrollY - 130 <= scrollPosition) {
+          if (top + window.scrollY - 100 <= scrollPosition) {
             currentSection = section.id;
           }
         }
@@ -184,178 +123,196 @@ export default function CreateProductForm() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  // Tạo tổ hợp biến thể từ màu và size đã chọn
-  const variantCombinations = useMemo(() => {
-    const selectedColors = colorFields.filter(c => c.checked);
-    if (selectedColors.length === 0 || selectedSizes.length === 0) return [];
-    return selectedColors.flatMap(color =>
-      selectedSizes.map(sizeId => {
-        const sizeObj = sizeOptions.find(s => s.id === sizeId);
-        return { color: color.value, colorName: color.name, size: sizeId, sizeName: sizeObj?.name || sizeId };
-      })
-    );
-  }, [colorFields, selectedSizes, sizeOptions]);
-
-  // State cho giá và số lượng từng biến thể
-  const [variantData, setVariantData] = useState<{ [key: string]: { price: string; quantity: string } }>({});
-
-  const handleVariantChange = (key: string, field: "price" | "quantity", value: string) => {
-    setVariantData(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        [field]: value,
-      },
-    }));
-  };
-
-  // State cho khối điền tổng
-  const [bulkSize, setBulkSize] = useState('all');
-  const [bulkColor, setBulkColor] = useState('all');
-  const [bulkPrice, setBulkPrice] = useState('');
-  const [bulkQty, setBulkQty] = useState('');
-
-  const handleBulkApply = () => {
-    setVariantData(prev => {
-      const updated = { ...prev };
-      variantCombinations.forEach(({ color, size }) => {
-        const matchSize = bulkSize === 'all' || size === bulkSize;
-        const matchColor = bulkColor === 'all' || color === bulkColor;
-        if (matchSize && matchColor) {
-          const key = `${color}_${size}`;
-          updated[key] = {
-            price: bulkPrice !== '' ? bulkPrice : (updated[key]?.price || ''),
-            quantity: bulkQty !== '' ? bulkQty : (updated[key]?.quantity || ''),
-          };
-        }
-      });
-      return updated;
-    });
-  };
-
-  const validateForm = () => {
-    const errors: string[] = [];
-    if (!productName.trim()) errors.push("Tên sản phẩm không được để trống");
-    if (!description.trim()) errors.push("Mô tả sản phẩm không được để trống");
-    // Validate images
-    const imageList = previews
-      .map((url, idx) => url ? { url, isMain: idx === 0 } : null)
-      .filter(Boolean) as { url: string; isMain: boolean }[];
-    if (imageList.length === 0) errors.push("Cần ít nhất 1 ảnh sản phẩm");
-    if (imageList.length === 1 && !imageList[0].isMain) errors.push("Nếu chỉ có 1 ảnh thì phải là ảnh chính (ô đầu tiên)");
-    // Không cho phép 2 ảnh trùng nhau
-    const urlSet = new Set<string>();
-    for (const img of imageList) {
-      if (urlSet.has(img.url)) {
-        errors.push("Không được chọn 2 ảnh sản phẩm trùng nhau");
-        break;
-      }
-      urlSet.add(img.url);
+  useEffect(() => {
+    if (attributes) {
+      const newVariants = generateVariants();
+      setVariants(newVariants);
     }
-    // Validate biến thể
-    const selectedColors = colorFields.filter(c => c.checked);
-    if (selectedColors.length === 0) errors.push("Chọn ít nhất 1 màu");
-    if (selectedSizes.length === 0) errors.push("Chọn ít nhất 1 size");
-    // Nếu có ít nhất 1 màu được chọn có ảnh thì tất cả màu được chọn đều phải có ảnh
-    const hasAnyColorImage = selectedColors.some(c => !!c.preview);
-    if (hasAnyColorImage) {
-      selectedColors.forEach(c => {
-        if (!c.preview) errors.push(`Màu ${c.name} cần có ảnh vì đã có màu khác có ảnh`);
-      });
-    }
-    const productItems = selectedColors.flatMap(color =>
-      selectedSizes.map(sizeId => {
-        const key = `${color.value}_${sizeId}`;
-        const data = variantData[key] || {};
-        return {
-          colorId: color.value,
-          sizeId: sizeId,
-          price: data.price ? Number(data.price) : 0,
-          quantity: data.quantity ? Number(data.quantity) : 0,
-          imageUrl: color.preview || "",
-        };
-      })
-    );
-    if (productItems.length === 0) errors.push("Phải có ít nhất 1 biến thể sản phẩm");
-    productItems.forEach(item => {
-      if (!item.colorId) errors.push("Thiếu mã màu cho biến thể");
-      if (!item.sizeId) errors.push("Thiếu mã size cho biến thể");
-      if (!item.price || item.price <= 0) errors.push(`Biến thể màu ${item.colorId} size ${item.sizeId} chưa nhập giá hoặc giá <= 0`);
-      if (item.quantity === undefined || item.quantity < 0) errors.push(`Biến thể màu ${item.colorId} size ${item.sizeId} chưa nhập số lượng hoặc số lượng < 0`);
-    });
-    setFormErrors(errors);
-    return errors.length === 0 ? { productName, description, images: imageList, productItems } : null;
-  };
+  }, [attributes]);
 
   const handleSubmit = async () => {
-    const result = validateForm();
-    if (!result) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!basicInfo || !attributes) {
+      console.warn("Chưa nhập đủ thông tin");
       return;
     }
-  
-    // 1. Cho loading hiển thị trước khi làm gì khác
-    setLoading(true);
-    await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
-  
-    try {
-      // 2. Upload ảnh
-      const uploadedImageUrls = await Promise.all(
-        result.images.map(async (img) => {
-          if (img.url && img.url.startsWith("blob:")) {
-            const fileIndex = previews.findIndex((url) => url === img.url);
-            if (fileIndex !== -1 && images[fileIndex]) {
-              const cloudUrl = await uploadImageToCloudinary(images[fileIndex]);
-              return { ...img, url: cloudUrl };
-            }
-          }
-          return img;
-        })
-      );
-  
-      const updatedProductItems = await Promise.all(
-        result.productItems.map(async (item) => {
-          if (item.imageUrl && item.imageUrl.startsWith("blob:")) {
-            const colorField = colorFields.find(
-              (c) => c.value === item.colorId && c.preview === item.imageUrl
-            );
-            if (colorField?.image) {
-              const cloudUrl = await uploadImageToCloudinary(colorField.image);
-              return { ...item, imageUrl: cloudUrl };
-            }
-          }
-          return item;
-        })
-      );
-  
-      const submitData = {
-        ...result,
-        images: uploadedImageUrls,
-        productItems: updatedProductItems,
+    const {
+      productName,
+      description,
+      mainImage,
+      subImages,
+    } = basicInfo;
+
+    const errors: {
+      productName?: string;
+      description?: string;
+      image?: string;
+      sizes?: string;
+      colors?: string;
+      variants?: string;
+    } = {};
+    if (!productName?.trim()) {
+      errors.productName = "Tên sản phẩm là bắt buộc.";
+    }
+    // Validate mô tả
+    if (!description?.trim()) {
+      errors.description = "Mô tả không được để trống.";
+    }
+    // Validate ảnh
+    const hasAtLeastOneImage =
+        !!mainImage || subImages.some((img: any) => img !== null);
+    const onlyOneImage =
+        (mainImage ? 1 : 0) + subImages.filter((i: any) => i !== null).length === 1;
+    if (!hasAtLeastOneImage) {
+      errors.image = "Bạn cần chọn ít nhất 1 ảnh cho sản phẩm.";
+    }
+    const errorMessage = validateVariants(variants);
+    if (errorMessage) {
+      errors.variants = errorMessage;
+    }
+
+    const isValid = Object.keys(errors).length === 0;
+    if (!isValid) {
+      console.warn("Form không hợp lệ:", errors);
+      Object.values(errors)
+      .filter((msg) => !!msg)
+      .forEach((msg) => toast.error(msg));
+      return;
+    }
+
+    setIsSubmitting(true); // 👉 Bắt đầu loading
+    try{
+      const images : {
+        url: string;
+        isMain: boolean;
+      } []= await buildImages(mainImage, subImages);
+      const productItems : {
+        colorId: string;
+        sizeId: string;
+        price: number;
+        quantity: number;
+        imageUrl: string | null;
+        active: boolean;
+      }[]= await buildProductItems(variants);
+      const productRequest: any = {
+        productName,
+        description,
+        images,
+        productItems,
       };
-  
-      await createProduct(submitData);
-      router.push("/manager/manager-product");
-    } catch (error) {
-      console.error(error);
-      toast.error("Có lỗi xảy ra!");
-    } finally {
-      setLoading(false);
+      await createProduct(productRequest);
+      router.push(`/manager/manager-product`);
+    }catch(error){
+      console.log(error)
+      toast.error("có lỗi xảy ra!");
+    }finally {
+      setIsSubmitting(false);
     }
   };
-  
 
-  // Helper lấy lỗi cho từng trường
-  const getFieldError = (field: string) => formErrors.find(e => e.toLowerCase().includes(field.toLowerCase()));
-  const getVariantError = (colorId: string, sizeId: string) => formErrors.filter(e => e.includes(`màu ${colorId}`) && e.includes(`size ${sizeId}`));
+  const buildImages = async (main: File, subs: File[]) => {
+    const images : {
+      url: string;
+      isMain: boolean;
+    } []= [];
+    const mainImageUrl = await uploadImageToCloudinary(main);
+    images.push({
+      url : mainImageUrl,
+      isMain: true,
+    });
+    const subImageUrls = await Promise.all(
+        subs
+        .filter((img: any) => img !== null)
+        .map((img: any) => uploadImageToCloudinary(img!))
+    );
+    subImageUrls.forEach(url =>{
+      images.push({
+        url,
+        isMain: false,
+      });
+    })
+    return images;
+  }
+  const buildProductItems = async (variants: Variant[]) => {
+    const productItems : {
+      colorId: string;
+      sizeId: string;
+      price: number;
+      quantity: number;
+      imageUrl: string | null;
+      active: boolean;
+    }[]= []
+    for (const variant of variants) {
+      let imageUrl = null;
+      if(variant.image){
+        imageUrl = await uploadImageToCloudinary(variant.image);
+      }
+      productItems.push({
+        colorId: variant.color.id,
+        sizeId: variant.size.id,
+        imageUrl,
+        quantity: variant?.quantity?? 0,
+        active: true,
+        price: variant?.price ?? 0
+      })
+    }
+    return productItems;
+  }
 
+
+  const validateVariants = (variants: Variant[]): string | null => {
+    if (!variants || variants.length === 0) {
+      return "Cần ít nhất 1 biến thể.";
+    }
+
+    // Kiểm tra price và quantity
+    for (const v of variants) {
+      if (v.price == null || v.price < 0) {
+        return `Giá của biến thể màu ${v.color.name} - size ${v.size.name} không hợp lệ.`;
+      }
+      if (v.quantity == null || v.quantity < 0) {
+        return `Tồn kho của biến thể màu ${v.color.name} - size ${v.size.name} không hợp lệ.`;
+      }
+    }
+
+    // Kiểm tra đồng nhất ảnh
+    const hasAnyImage = variants.some((v) => v.image !== null);
+    const allHaveImages = variants.every((v) => v.image !== null);
+    if (hasAnyImage && !allHaveImages) {
+      return "Nếu một biến thể có ảnh thì tất cả biến thể còn lại cũng phải có ảnh.";
+    }
+    return null; // Hợp lệ
+  };
+
+  const generateVariants = () => {
+    if (!attributes) return [];
+    const { selectedSizes, selectedColors } = attributes;
+
+    const variants: Variant[] = [];
+    selectedColors.forEach((color: any) => {
+      selectedSizes.forEach((size: any) => {
+        // Tìm variant cũ (nếu có)
+        const old = variants.find(
+          (v) => v.color.id === color.color.id && v.size.id === size.id
+        ) || (Array.isArray(variants) && variants.length > 0 ? variants.find(
+          (v) => v.color.id === color.color.id && v.size.id === size.id
+        ) : undefined);
+        variants.push({
+          color: color?.color ?? null,
+          size: size,
+          image: color.image,
+          price: old?.price ?? 0,
+          quantity: old?.quantity ?? 0,
+        });
+      });
+    });
+    return variants;
+  };
   return (
       <div>
-        <div className="flex justify-end mt-8">
-          <Button onClick={handleSubmit} endIcon={<PackagePlus size={18}/>}  type="submit" size="sm" variant="add">Submit</Button>
+        <div className="flex justify-end items-center mb-2">
+          <Button size={"xs"} variant={"add"} startIcon={<PackagePlus/>} onClick={handleSubmit}>Thêm</Button>
         </div>
-        <div className="flex gap-8 w-full max-w-[1200px] mx-auto">
+        <div className="flex gap-8 w-full  mx-auto">
           {/* Sidebar */}
           <aside className="w-64 flex-shrink-0 sticky top-24 self-start bg-white border border-gray-200 rounded-xl p-4 h-fit">
             <nav className="flex flex-col gap-2">
@@ -374,6 +331,7 @@ export default function CreateProductForm() {
               ))}
             </nav>
           </aside>
+
           {/* Main content */}
           <div className="flex-1 flex flex-col gap-10">
             {/* Section: Basic information */}
@@ -382,155 +340,18 @@ export default function CreateProductForm() {
                 ref={el => { sectionRefs.current["basic-info"] = el; }}
                 className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
             >
-              <h2 className="font-semibold text-lg mb-4">Basic information</h2>
-              {/* Hiển thị lỗi tổng hợp đầu form nếu có lỗi không xác định trường */}
-              {formErrors.length > 0 && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-300 text-red-700 rounded-lg">
-                  <ul className="list-disc pl-5">
-                    {formErrors.filter(e => !e.includes('màu') && !e.includes('size')).map((err, idx) => <li key={idx}>{err}</li>)}
-                  </ul>
-                </div>
-              )}
-              <div className="grid grid-cols-3 gap-2 w-fit p-4">
-                {Array.from({ length: IMAGE_SLOT_COUNT }).map((_, idx) => (
-                    <div key={idx}>
-                      <DropImageProduct
-                          preview={previews[idx]}
-                          onDrop={handleDrop(idx)}
-                          onRemove={() => handleRemove(idx)}
-                          index={idx}
-                      />
-                      {/* Lỗi ảnh chính */}
-                      {idx === 0 && getFieldError('ảnh chính') && (
-                        <div className="text-xs text-red-500 mt-1">{getFieldError('ảnh chính')}</div>
-                      )}
-                      {/* Lỗi ảnh trùng nhau */}
-                      {idx === 0 && getFieldError('trùng nhau') && (
-                        <div className="text-xs text-red-500 mt-1">{getFieldError('trùng nhau')}</div>
-                      )}
-                    </div>
-                ))}
-              </div>
-              <div className="mt-4">
-                <Label>
-                  Tên sản phẩm <span className="text-error-500">*</span>
-                </Label>
-                <Input
-                    placeholder="Tên sản phẩm"
-                    type="text"
-                    value={productName}
-                    onChange={(e) => setProductName(e.target.value)}
-                    error={!!getFieldError('tên sản phẩm')}
-                    hint={getFieldError('tên sản phẩm')}
-                />
-              </div>
-              <div className="w-[300px] mt-4">
-                <Label>Danh mục sản phẩm</Label>
-                <div className="relative">
-                  <Select
-                      options={options}
-                      placeholder="Select Option"
-                      onChange={() => null}
-                      className="dark:bg-dark-900"
-                  />
-                  <span className="absolute text-gray-500 -translate-y-1/2 pointer-events-none right-3 top-1/2 dark:text-gray-400">
-                <ChevronDownIcon />
-              </span>
-                </div>
-                </div>
-                <div className="mt-4">
-                  <Label>Description</Label>
-                  <TextArea value={description} onChange={setDescription} rows={6} error={!!getFieldError('mô tả')} hint={getFieldError('mô tả')} />
-                </div>
+              <h2 className="font-semibold text-lg mb-4">Thông tin cơ bản</h2>
+              <BasicInfoProductForm onChange={setBasicInfo} initialData={initBaseInfo} />
             </div>
+
             {/* Section: Product details */}
             <div
                 id="product-details"
                 ref={el => { sectionRefs.current["product-details"] = el; }}
                 className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
             >
-              <h2 className="font-semibold text-lg mb-4">Product details</h2>
-              <div className="mb-6">
-                <Label>Màu sản phẩm</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {colorFields.map((color, idx) => (
-                      <div key={color.value} className="flex items-center gap-4 justify-start border p-2 rounded-lg">
-                        <div className="w-[132px]">
-                          <DropImageProduct
-                              preview={color.preview}
-                              onDrop={(files) => {
-                                const file = files[0];
-                                const url = file ? URL.createObjectURL(file) : null;
-                                setColorFields(fields => fields.map((c, i) => {
-                                  if (i === idx) {
-                                    if (c.preview) URL.revokeObjectURL(c.preview);
-                                    return { ...c, image: file, preview: url };
-                                  }
-                                  return c;
-                                }));
-                              }}
-                              onRemove={() => {
-                                setColorFields(fields => fields.map((c, i) => {
-                                  if (i === idx) {
-                                    if (c.preview) URL.revokeObjectURL(c.preview);
-                                    return { ...c, image: null, preview: null };
-                                  }
-                                  return c;
-                                }));
-                              }}
-                              index={idx}
-                          />
-                          {/* Lỗi thiếu ảnh cho màu */}
-                          {color.checked && getFieldError(`Màu ${color.name} cần có ảnh`) && (
-                            <div className="text-xs text-red-500 mt-1">{getFieldError(`Màu ${color.name} cần có ảnh`)}</div>
-                          )}
-                        </div>
-                        <Input
-                            value={color.name}
-                            onChange={e => {
-                              const name = e.target.value;
-                              setColorFields(fields => fields.map((c, i) => i === idx ? { ...c, name } : c));
-                            }}
-                            className="w-32"
-                        />
-                        <Checkbox
-                            checked={color.checked}
-                            onChange={checked => {
-                              setColorFields(fields => fields.map((c, i) => i === idx ? { ...c, checked } : c));
-                            }}
-                        />
-                        <span className="text-xs text-gray-500 ml-2">Chọn</span>
-                      </div>
-                  ))}
-                </div>
-              </div>
-              <div className="mb-6">
-                <Label>Chọn size sản phẩm</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {sizeOptions.map(option => (
-                      <button
-                          key={option.id}
-                          type="button"
-                          className={`px-4 py-2 rounded-full border text-sm font-medium transition
-                    ${selectedSizes.includes(option.id)
-                              ? 'bg-brand-500 text-white border-brand-500'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}
-                  `}
-                          onClick={() => {
-                            setSelectedSizes(sizes =>
-                                sizes.includes(option.id)
-                                    ? sizes.filter(s => s !== option.id)
-                                    : [...sizes, option.id]
-                            );
-                          }}
-                      >
-                        {option.name}
-                      </button>
-                  ))}
-                </div>
-                <div className="mt-2 text-sm text-gray-500">Đã chọn: {sizeOptions.filter(s=>selectedSizes.includes(s.id)).map(s=>s.name).join(", ") || "(Chưa chọn)"}</div>
-              </div>
-              <div className="text-gray-400">(Nội dung chi tiết sản phẩm ở đây)</div>
+              <h2 className="font-semibold text-lg mb-4">Thuộc tính sản phẩm</h2>
+              <AttributeProductForm onChange={setAttributes} initialData={initAttribute} />
             </div>
             {/* Section: Sales information */}
             <div
@@ -538,81 +359,22 @@ export default function CreateProductForm() {
                 ref={el => { sectionRefs.current["sales-info"] = el; }}
                 className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] p-6"
             >
-              <h2 className="font-semibold text-lg mb-4">Sales information</h2>
-              {/* Khối điền tổng */}
-              <div className="flex flex-wrap items-end gap-4 mb-6">
-                <div className="w-40">
-                  <Label>Chọn size</Label>
-                  <select
-                      className="w-full border rounded-lg px-2 py-2"
-                      value={bulkSize}
-                      onChange={e => setBulkSize(e.target.value)}
-                  >
-                    <option value="all">Tất cả</option>
-                    {selectedSizes.map(sizeId => {
-                      const sizeObj = sizeOptions.find(s => s.id === sizeId);
-                      return (
-                        <option key={sizeId} value={sizeId}>
-                          {sizeObj ? sizeObj.name : sizeId}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <div className="w-40">
-                  <Label>Chọn màu</Label>
-                  <select
-                      className="w-full border rounded-lg px-2 py-2"
-                      value={bulkColor}
-                      onChange={e => setBulkColor(e.target.value)}
-                  >
-                    <option value="all">Tất cả</option>
-                    {colorFields.filter(c => c.checked).map(color => (
-                        <option key={color.value} value={color.value}>
-                          {color.name}
-                        </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="w-32">
-                  <Label>Giá</Label>
-                  <Input
-                      type="number"
-                      min="0"
-                      value={bulkPrice}
-                      onChange={e => setBulkPrice(e.target.value)}
-                      placeholder="Giá"
-                  />
-                </div>
-                <div className="w-28">
-                  <Label>Số lượng</Label>
-                  <Input
-                      type="number"
-                      min="0"
-                      value={bulkQty}
-                      onChange={e => setBulkQty(e.target.value)}
-                      placeholder="Số lượng"
-                  />
-                </div>
-                <Button size="sm" variant="primary" onClick={handleBulkApply}>Áp dụng</Button>
-              </div>
-              <div className="overflow-x-auto">
-                <ProductVariantTable
-                  variantCombinations={variantCombinations}
-                  variantData={variantData}
-                  handleVariantChange={handleVariantChange}
-                  getVariantError={getVariantError}
-                />
-              </div>
+              <h2 className="font-semibold text-lg mb-4">Giá & kho</h2>
+              <SalesInfoForm
+                  variants={variants}
+                  onChange={setVariants}
+              />
             </div>
           </div>
         </div>
-        {loading && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center space-y-2">
-            <div className="w-10 h-10 border-4 border-t-transparent border-blue-500 rounded-full animate-spin"></div>
-            <span className="text-sm text-gray-700 font-medium">Đang tải...</span>
-          </div>
-        </div>}
+        {isSubmitting && (
+            <div className="fixed inset-0 z-99999 flex items-center justify-center bg-gray-300 bg-opacity-40">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
+                <span className="text-white text-sm font-medium">Đang xử lý, vui lòng đợi...</span>
+              </div>
+            </div>
+        )}
       </div>
   );
 }
